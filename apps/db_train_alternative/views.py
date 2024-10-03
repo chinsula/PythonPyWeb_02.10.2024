@@ -2,12 +2,12 @@ import json
 
 from django.http import JsonResponse
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import Author
 
 
 class AuthorREST(View):
-
     @csrf_exempt
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
@@ -45,7 +45,11 @@ class AuthorREST(View):
     def post(self, request):
         try:
             data = json.loads(request.body)
-            author = Author.objects.create(name=data['name'], email=data['email'])
+
+            author = Author(name=data['name'], email=data['email'])
+            author.clean_fields()  # Запуск валидаций
+            author.save()  # Сохранение в БД
+
             response_data = {
                 'message': f'Автор успешно создан',
                 'id': author.id,
@@ -60,4 +64,37 @@ class AuthorREST(View):
             return JsonResponse({'error': str(e)}, status=400,
                                 json_dumps_params={"ensure_ascii": False,
                                                    "indent": 4}
+                                )
+
+    def put(self, request, id):
+        try:
+            author = Author.objects.get(id=id)
+            data = json.loads(request.body)
+            # Обновляем поля
+            author.name = data['name']
+            author.email = data['email']
+            author.clean_fields()  # Запуск валидаций
+            author.save()  # Сохранение в БД
+
+            response_data = {
+                'message': f'Данные автора успешно изменены',
+                'id': author.id,
+                'name': author.name,
+                'email': author.email
+            }
+            return JsonResponse(response_data,
+                                json_dumps_params={"ensure_ascii": False,
+                                                   "indent": 4},
+                                )
+        except Author.DoesNotExist:  # Если получили ошибку
+            return JsonResponse({'error': 'Автор не найден'},
+                                status=404,
+                                json_dumps_params={"ensure_ascii": False,
+                                                   "indent": 4},
+                                )
+        except Exception as e:  # При любой другой ошибке
+            return JsonResponse({'error': str(e)},
+                                status=400,
+                                json_dumps_params={"ensure_ascii": False,
+                                                   "indent": 4},
                                 )
